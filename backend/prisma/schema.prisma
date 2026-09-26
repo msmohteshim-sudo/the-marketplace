@@ -1,0 +1,602 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────
+// CORE USER MODEL
+// ─────────────────────────────────────────────────────────
+
+model User {
+  id                      String    @id @default(uuid())
+  email                   String    @unique
+  phone                   String?
+  phoneCountryCode        String?   @default("+91")
+  phoneVerified           Boolean   @default(false)
+  phoneVerifiedAt         DateTime?
+  secondaryPhone          String?
+  secondaryPhoneCountryCode String? @default("+91")
+  secondaryPhoneVerified  Boolean   @default(false)
+  secondaryPhoneVerifiedAt DateTime?
+  secondaryPhoneUse       Boolean   @default(false)
+  phoneVisibility         String    @default("private") // private|hired|selected|transactions
+
+  passwordHash            String
+  fullName                String?
+  profilePhoto            String?
+  bio                     String?
+  location                String?
+  country                 String?   @default("India")
+  state                   String?
+  district                String?
+  city                    String?
+  area                    String?
+  locality                String?
+  pincode                 String?
+  latitude                Float?
+  longitude               Float?
+  serviceRadius           Float?    // km
+
+  activeMode              String    @default("client") // client|freelancer|both
+  capabilities            String    @default("[\"client\"]") // JSON array string e.g. ["client", "freelancer"]
+  clientWorkPreference    String    @default("both") // digital|physical|both
+  freelancerWorkPreference String   @default("both") // digital|physical|both
+  activeWorkType          String    @default("both") // digital|physical|both
+
+  emailVerified           Boolean   @default(true)
+  identityVerified        Boolean   @default(false)
+  skillVerified           Boolean   @default(false)
+  localWorkerVerified     Boolean   @default(false)
+  isAdmin                 Boolean   @default(false)
+  isVerified              Boolean   @default(false)
+  profileComplete         Int       @default(0) // percentage 0-100
+
+  profileVisibility       String    @default("public") // public|marketplace|private
+  resumeVisibility        String    @default("private") // private|clients|proposal|hired
+
+  resetToken              String?
+  resetTokenExpiry        DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  // Profile
+  profile                 Profile?
+
+  // Services & Jobs
+  services                Service[]       @relation("SellerServices")
+  orders_as_buyer         Order[]        @relation("BuyerOrders")
+  orders_as_seller        Order[]        @relation("SellerOrders")
+  jobsPosted              Job[]           @relation("ClientJobs")
+  applications            Application[]
+
+  // Ideas
+  ideas                   Idea[]
+  idea_licenses_bought    IdeaLicense[] @relation("BuyerLicenses")
+
+  // Courses
+  courses_taught          Course[]
+  enrollments             Enrollment[]
+
+  // Reviews
+  reviews_given           Review[]        @relation("ReviewerReviews")
+  reviews_received        Review[]       @relation("RevieweeReviews")
+
+  // Social
+  messages_sent           Message[]       @relation("SentMessages")
+  messages_recv           Message[]       @relation("ReceivedMessages")
+  notifications           Notification[]
+  saved_items             SavedItem[]
+  reports_filed           Report[]        @relation("ReporterReports")
+}
+
+model Profile {
+  id                  String    @id @default(uuid())
+  userId              String    @unique
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  professionalTitle   String?
+  clientType          String?   @default("Individual") // Individual|Startup|Small Business|Company|Organization
+  companyName         String?
+  industry            String?
+
+  // Skills & Experience
+  skills              String?   // JSON array stored as string
+  primarySkills       String?   // JSON array
+  secondarySkills     String?   // JSON array
+  experience          String?   // JSON array
+  education           String?   // JSON array
+  languages           String?   // JSON array
+  portfolio           String?   // JSON array of {title, url, image, description}
+  certifications      String?   // JSON array
+  interests           String?   // JSON array
+
+  // Resume
+  resumeUrl           String?
+  resumeName          String?
+  resumeUploadedAt    DateTime?
+  resumeParsedData    String?   // JSON string of extracted skills, title, summary
+
+  // Work preferences & rates
+  hourlyRate          Float?
+  projectRate         Float?
+  deliveryCapacity    String?
+  serviceCategory     String?
+  workingHours        String?
+  hiringFrequency     String?
+  preferredBudget     String?
+  preferredCategories String?   // JSON array
+  availability        String?   @default("available") // available|busy|not_available
+  serviceRadius       Float?    // km for local workers
+
+  // Badges
+  isTopRated          Boolean   @default(false)
+  isTrustedSeller     Boolean   @default(false)
+  isSkillCertified    Boolean   @default(false)
+
+  // Stats (denormalized for performance)
+  totalRating         Float     @default(0)
+  ratingCount         Int       @default(0)
+  jobsCompleted       Int       @default(0)
+  coursesCompleted    Int       @default(0)
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────
+// CATEGORIES
+// ─────────────────────────────────────────────────────────
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String    @unique
+  type        String    // digital_service|local_service|digital_job|local_job|idea|course
+  icon        String?
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  services    Service[]
+  jobs        Job[]
+  ideas       Idea[]
+  courses     Course[]
+}
+
+// ─────────────────────────────────────────────────────────
+// SERVICES
+// ─────────────────────────────────────────────────────────
+
+model Service {
+  id          String    @id @default(uuid())
+  sellerId    String
+  seller      User      @relation("SellerServices", fields: [sellerId], references: [id])
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+
+  title       String
+  description String
+  type        String    // digital|local
+  tags        String?   // JSON array
+  images      String?   // JSON array of image URLs
+  status      String    @default("active") // active|paused|pending|rejected
+
+  // For local services
+  location    String?
+  serviceRadius Float?  // km
+
+  // Delivery
+  deliveryTime Int?     // days
+  revisions   Int?
+
+  // Stats
+  totalOrders Int       @default(0)
+  totalRating Float     @default(0)
+  ratingCount Int       @default(0)
+
+  isVerified  Boolean   @default(false)
+  isFeatured  Boolean   @default(false)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  packages    ServicePackage[]
+  orders      Order[]
+  reviews     Review[]        @relation("ServiceReviews")
+  saved_by    SavedItem[]     @relation("SavedServices")
+}
+
+model ServicePackage {
+  id          String    @id @default(uuid())
+  serviceId   String
+  service     Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  name        String    // Basic|Standard|Premium
+  description String?
+  price       Float
+  deliveryDays Int
+  revisions   Int       @default(1)
+  features    String?   // JSON array
+  createdAt   DateTime  @default(now())
+}
+
+// ─────────────────────────────────────────────────────────
+// ORDERS
+// ─────────────────────────────────────────────────────────
+
+model Order {
+  id          String    @id @default(uuid())
+  buyerId     String
+  buyer       User      @relation("BuyerOrders", fields: [buyerId], references: [id])
+  sellerId    String
+  seller      User      @relation("SellerOrders", fields: [sellerId], references: [id])
+  serviceId   String
+  service     Service   @relation(fields: [serviceId], references: [id])
+  packageId   String?
+
+  status      String    @default("pending") // pending|accepted|in_progress|delivered|revision|completed|cancelled|disputed
+  price       Float
+  requirements String?
+  deliveryDue DateTime?
+  completedAt DateTime?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  review      Review?   @relation("OrderReview")
+}
+
+// ─────────────────────────────────────────────────────────
+// JOBS & TASKS
+// ─────────────────────────────────────────────────────────
+
+model Job {
+  id          String    @id @default(uuid())
+  clientId    String
+  client      User      @relation("ClientJobs", fields: [clientId], references: [id])
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+
+  title       String
+  description String
+  type        String    // digital|local
+  skills      String?   // JSON array required skills
+  tags        String?   // JSON array
+
+  // Budget
+  budgetMin   Float?
+  budgetMax   Float?
+  paymentType String?   // fixed|hourly|milestone|monthly
+
+  // Duration
+  duration    String?   // one_day|1_3_days|1_week|1_4_weeks|1_3_months|long_term
+
+  // For local jobs
+  location    String?
+  distance    Float?
+  workersNeeded Int     @default(1)
+  scheduledDate String?
+  scheduledTime String?
+  urgency     String?   // normal|urgent|asap
+
+  status      String    @default("open") // open|in_progress|completed|cancelled|closed
+  isVerifiedClient Boolean @default(false)
+  isFeatured  Boolean   @default(false)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  applications Application[]
+  saved_by    SavedItem[]     @relation("SavedJobs")
+}
+
+model Application {
+  id          String    @id @default(uuid())
+  jobId       String
+  job         Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  applicantId String
+  applicant   User      @relation(fields: [applicantId], references: [id])
+
+  coverLetter String?
+  proposedBudget Float?
+  estimatedDuration String?
+  status      String    @default("pending") // pending|shortlisted|accepted|rejected|withdrawn
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────
+// IDEAS MARKETPLACE
+// ─────────────────────────────────────────────────────────
+
+model Idea {
+  id          String    @id @default(uuid())
+  creatorId   String
+  creator     User      @relation(fields: [creatorId], references: [id])
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+
+  title       String
+  summary     String    // Public summary (limited info)
+  problem     String?   // Hidden until purchased/NDA
+  solution    String?   // Hidden until purchased/NDA
+  targetUsers String?
+  businessModel String?
+  requiredSkills String? // JSON array
+  stage       String?   // concept|prototype|validated|mvp
+  tags        String?   // JSON array
+
+  // Pricing & Licensing
+  price       Float?
+  licenseTypes String?  // JSON array: personal|project|commercial|startup|exclusive
+  isNDARequired Boolean @default(false)
+
+  status      String    @default("active") // draft|active|sold|archived
+
+  // Stats
+  views       Int       @default(0)
+  interestedCount Int   @default(0)
+
+  isVerified  Boolean   @default(false)
+  isFeatured  Boolean   @default(false)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  licenses    IdeaLicense[]
+  saved_by    SavedItem[]   @relation("SavedIdeas")
+}
+
+model IdeaLicense {
+  id          String    @id @default(uuid())
+  ideaId      String
+  idea        Idea      @relation(fields: [ideaId], references: [id])
+  buyerId     String
+  buyer       User      @relation("BuyerLicenses", fields: [buyerId], references: [id])
+
+  licenseType String    // personal|project|commercial|startup|exclusive
+  price       Float
+  isExclusive Boolean   @default(false)
+  duration    String?   // perpetual|1_year|2_years
+  usageRights String?
+
+  purchasedAt DateTime  @default(now())
+  expiresAt   DateTime?
+}
+
+// ─────────────────────────────────────────────────────────
+// COURSES & LEARNING
+// ─────────────────────────────────────────────────────────
+
+model Course {
+  id          String    @id @default(uuid())
+  instructorId String
+  instructor  User      @relation(fields: [instructorId], references: [id])
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+
+  title       String
+  description String
+  thumbnail   String?
+  level       String    // beginner|intermediate|advanced
+  language    String    @default("English")
+  tags        String?   // JSON array
+
+  price       Float     @default(0)
+  isFree      Boolean   @default(false)
+  hasCertificate Boolean @default(true)
+
+  status      String    @default("draft") // draft|published|archived
+
+  // Stats
+  totalStudents Int     @default(0)
+  totalRating Float     @default(0)
+  ratingCount Int       @default(0)
+  totalDuration Int     @default(0) // minutes
+
+  isFeatured  Boolean   @default(false)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  modules     CourseModule[]
+  enrollments Enrollment[]
+  reviews     Review[]        @relation("CourseReviews")
+  saved_by    SavedItem[]     @relation("SavedCourses")
+}
+
+model CourseModule {
+  id          String    @id @default(uuid())
+  courseId    String
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title       String
+  order       Int
+  createdAt   DateTime  @default(now())
+
+  lessons     Lesson[]
+}
+
+model Lesson {
+  id          String    @id @default(uuid())
+  moduleId    String
+  module      CourseModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title       String
+  type        String    // video|pdf|quiz|assignment|text
+  content     String?   // URL or text content
+  duration    Int?      // minutes
+  order       Int
+  isFree      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+}
+
+model Enrollment {
+  id          String    @id @default(uuid())
+  courseId    String
+  course      Course    @relation(fields: [courseId], references: [id])
+  studentId   String
+  student     User      @relation(fields: [studentId], references: [id])
+
+  progress    Int       @default(0) // percentage
+  completedAt DateTime?
+  paidPrice   Float     @default(0)
+
+  enrolledAt  DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  certificate Certificate?
+}
+
+model Certificate {
+  id            String    @id @default(uuid())
+  enrollmentId  String    @unique
+  enrollment    Enrollment @relation(fields: [enrollmentId], references: [id])
+  certificateNo String    @unique
+  issuedAt      DateTime  @default(now())
+  // Blockchain verification hook (prototype)
+  blockchainHash String?
+}
+
+// ─────────────────────────────────────────────────────────
+// REVIEWS
+// ─────────────────────────────────────────────────────────
+
+model Review {
+  id          String    @id @default(uuid())
+  reviewerId  String
+  reviewer    User      @relation("ReviewerReviews", fields: [reviewerId], references: [id])
+  revieweeId  String?
+  reviewee    User?     @relation("RevieweeReviews", fields: [revieweeId], references: [id])
+
+  // Polymorphic
+  entityType  String    // service|job|course|idea
+  entityId    String
+
+  rating      Float     // 1-5
+  comment     String?
+  isVerified  Boolean   @default(false) // verified purchase/work
+
+  // Service review
+  serviceId   String?
+  service     Service?  @relation("ServiceReviews", fields: [serviceId], references: [id])
+
+  // Course review
+  courseId    String?
+  course      Course?   @relation("CourseReviews", fields: [courseId], references: [id])
+
+  // Order review
+  orderId     String?   @unique
+  order       Order?    @relation("OrderReview", fields: [orderId], references: [id])
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────
+// MESSAGES
+// ─────────────────────────────────────────────────────────
+
+model Message {
+  id          String    @id @default(uuid())
+  senderId    String
+  sender      User      @relation("SentMessages", fields: [senderId], references: [id])
+  receiverId  String
+  receiver    User      @relation("ReceivedMessages", fields: [receiverId], references: [id])
+
+  content     String
+  type        String    @default("text") // text|file|image|link
+  fileUrl     String?
+  isRead      Boolean   @default(false)
+
+  // Context reference (optional)
+  contextType String?   // job|service|idea|course|order
+  contextId   String?
+
+  createdAt   DateTime  @default(now())
+}
+
+// ─────────────────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────────────────
+
+model Notification {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type        String    // new_job|application_update|order_update|payment|review|message|idea_interest|course_enrolled
+  title       String
+  body        String
+  icon        String?
+  link        String?
+  isRead      Boolean   @default(false)
+
+  createdAt   DateTime  @default(now())
+}
+
+// ─────────────────────────────────────────────────────────
+// SAVED ITEMS
+// ─────────────────────────────────────────────────────────
+
+model SavedItem {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  entityType  String    // service|job|idea|course|profile
+  entityId    String
+
+  serviceId   String?
+  service     Service?  @relation("SavedServices", fields: [serviceId], references: [id])
+  jobId       String?
+  job         Job?      @relation("SavedJobs", fields: [jobId], references: [id])
+  ideaId      String?
+  idea        Idea?     @relation("SavedIdeas", fields: [ideaId], references: [id])
+  courseId    String?
+  course      Course?   @relation("SavedCourses", fields: [courseId], references: [id])
+
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, entityType, entityId])
+}
+
+// ─────────────────────────────────────────────────────────
+// REPORTS / MODERATION
+// ─────────────────────────────────────────────────────────
+
+model Report {
+  id          String    @id @default(uuid())
+  reporterId  String
+  reporter    User      @relation("ReporterReports", fields: [reporterId], references: [id])
+
+  entityType  String    // user|service|job|idea|course|message|review
+  entityId    String
+  reason      String
+  description String?
+  status      String    @default("pending") // pending|reviewed|resolved|dismissed
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────
+// TRANSACTIONS (Payment Prototype)
+// ─────────────────────────────────────────────────────────
+
+model Transaction {
+  id          String    @id @default(uuid())
+  userId      String
+  entityType  String    // order|enrollment|idea_license
+  entityId    String
+  amount      Float
+  currency    String    @default("INR")
+  status      String    @default("pending") // pending|completed|refunded|failed
+  // PAYMENT PROTOTYPE - Real payment gateway not connected
+  paymentMethod String? 
+  gatewayRef  String?
+
+  createdAt   DateTime  @default(now())
+}
