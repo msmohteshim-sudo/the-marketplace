@@ -19,29 +19,8 @@ import clientDigitalRoutes from './routes/clientDigital.routes';
 const app = express();
 
 // Middlewares
-const getAllowedOrigins = (): string[] => {
-  const envOrigins = config.frontendUrl || 'http://localhost:5173';
-  return envOrigins.split(',').map(o => o.trim().replace(/\/+$/, '')).filter(Boolean);
-};
-
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-
-    const origins = getAllowedOrigins();
-    const cleanOrigin = origin.replace(/\/+$/, '');
-
-    if (
-      origins.includes('*') ||
-      origins.includes(cleanOrigin) ||
-      /\.vercel\.app$/.test(new URL(origin).hostname) ||
-      process.env.NODE_ENV !== 'production'
-    ) {
-      return callback(null, true);
-    }
-
-    return callback(null, true);
-  },
+  origin: config.frontendUrl,
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
