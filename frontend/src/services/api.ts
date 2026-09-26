@@ -1,4 +1,14 @@
-const API_BASE = '/api';
+const rawEnvUrl = (import.meta as any).env?.VITE_API_URL;
+
+const getBaseUrl = (): string => {
+  if (!rawEnvUrl || rawEnvUrl.trim() === '') {
+    return '/api';
+  }
+  const cleanUrl = rawEnvUrl.trim().replace(/\/+$/, '');
+  return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
+};
+
+const API_BASE = getBaseUrl();
 
 const getHeaders = () => {
   const token = localStorage.getItem('mp_token');
